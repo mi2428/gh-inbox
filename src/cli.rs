@@ -14,7 +14,7 @@ Examples:
   gh inbox sweep
   gh inbox sweep --read
   gh inbox sweep --include-authored
-  gh inbox sweep --closed --repo cli/cli --user monalisa
+  gh inbox sweep --closed --repo mi2428/helloworld --user renovate
   gh inbox sweep --team-mentioned --no-mentioned
 "
 )]
