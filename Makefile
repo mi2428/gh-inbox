@@ -14,9 +14,7 @@ DOCKER_UID   ?= $(shell id -u)
 DOCKER_GID   ?= $(shell id -g)
 BINDIR       := bin
 DISTDIR      := dist
-VERSION      ?= $(shell git describe --tags --always --dirty 2>/dev/null || git rev-parse --short=12 HEAD 2>/dev/null || echo dev)
-RELEASE_TAG  ?= $(VERSION)
-MAIN_TAG     ?= main-$(shell git rev-parse --short=12 HEAD 2>/dev/null || echo dev)
+LOCAL_ENTRYPOINT := $(APP)
 DARWIN_ARCHS ?= amd64 arm64
 LINUX_ARCHS  ?= amd64 arm64
 RUST_TARGETS := x86_64-apple-darwin aarch64-apple-darwin
@@ -44,6 +42,11 @@ build: ## Build the host binary into bin/
 	@chmod +x $(BINDIR)/$(APP)
 	@echo "Wrote $(BINDIR)/$(APP)"
 
+.PHONY: install-local
+install-local: build ## Build the host binary and create the repo-root entrypoint for gh extension install .
+	@ln -sfn $(BINDIR)/$(APP) $(LOCAL_ENTRYPOINT)
+	@echo "Wrote $(LOCAL_ENTRYPOINT) -> $(BINDIR)/$(APP)"
+
 .PHONY: fmt
 fmt: ## Format the Rust sources
 	@$(CARGO_ENV) $(CARGO) fmt --all
@@ -61,13 +64,13 @@ test: ## Run the unit test suite
 	@$(CARGO_ENV) $(CARGO) test
 
 .PHONY: docker-check
-docker-check: ## Verify that Docker is available for Linux release builds
+docker-check: ## Verify that Docker is available for Linux cross-builds
 	@command -v $(DOCKER) >/dev/null 2>&1 || { \
-		echo "Docker is required for Linux release builds" >&2; \
+		echo "Docker is required for Linux cross-builds" >&2; \
 		exit 1; \
 	}
 	@$(DOCKER) info >/dev/null 2>&1 || { \
-		echo "A running Docker daemon is required for Linux release builds" >&2; \
+		echo "A running Docker daemon is required for Linux cross-builds" >&2; \
 		exit 1; \
 	}
 
@@ -84,26 +87,26 @@ $(foreach target,$(RUST_TARGETS),$(eval $(call TARGET_RULE,$(target))))
 
 define DARWIN_DIST_RULE
 .PHONY: dist-darwin.$(1)
-dist-darwin.$(1): target.$$(DARWIN_$(1)_TARGET) ## Build the $(1) Darwin release asset
+dist-darwin.$(1): target.$$(DARWIN_$(1)_TARGET) ## Build the $(1) Darwin binary into dist/
 	@echo "Building $(APP) for $$(DARWIN_$(1)_TARGET)"
 	@mkdir -p $(DISTDIR)
 	@$(CARGO_ENV) $(CARGO) build --release --target $$(DARWIN_$(1)_TARGET)
-	@cp target/$$(DARWIN_$(1)_TARGET)/release/$(APP) $(DISTDIR)/$(APP)_$(RELEASE_TAG)_$$(DARWIN_$(1)_SUFFIX)
-	@chmod +x $(DISTDIR)/$(APP)_$(RELEASE_TAG)_$$(DARWIN_$(1)_SUFFIX)
-	@echo "Wrote $(DISTDIR)/$(APP)_$(RELEASE_TAG)_$$(DARWIN_$(1)_SUFFIX)"
+	@cp target/$$(DARWIN_$(1)_TARGET)/release/$(APP) $(DISTDIR)/$(APP)_$$(DARWIN_$(1)_SUFFIX)
+	@chmod +x $(DISTDIR)/$(APP)_$$(DARWIN_$(1)_SUFFIX)
+	@echo "Wrote $(DISTDIR)/$(APP)_$$(DARWIN_$(1)_SUFFIX)"
 endef
 $(foreach arch,$(DARWIN_ARCHS),$(eval $(call DARWIN_DIST_RULE,$(arch))))
 
 .PHONY: dist-darwin
-dist-darwin: ## Build all precompiled Darwin release assets
+dist-darwin: ## Build all Darwin binaries into dist/
 	@mkdir -p $(DISTDIR)
 	@for arch in $(DARWIN_ARCHS); do \
-		$(MAKE) dist-darwin.$$arch RELEASE_TAG=$(RELEASE_TAG) || exit $$?; \
+		$(MAKE) dist-darwin.$$arch || exit $$?; \
 	done
 
 define LINUX_DIST_RULE
 .PHONY: dist-linux.$(1)
-dist-linux.$(1): docker-check ## Build the $(1) Linux release asset via Docker
+dist-linux.$(1): docker-check ## Build the $(1) Linux binary into dist/ via Docker
 	@echo "Building $(APP) for $$(LINUX_$(1)_PLATFORM) via Docker"
 	@mkdir -p $(DISTDIR) .cargo-linux/$(1) .home-linux/$(1)
 	@$(DOCKER) run --rm \
@@ -115,70 +118,31 @@ dist-linux.$(1): docker-check ## Build the $(1) Linux release asset via Docker
 		-v "$(CURDIR):/workspace" \
 		-w /workspace \
 		$(LINUX_BUILD_IMAGE) \
-		bash -c 'export PATH="/usr/local/cargo/bin:$$$$PATH"; cargo build --release && cp target/linux-$(1)/release/$(APP) dist/$(APP)_$(RELEASE_TAG)_$$(LINUX_$(1)_SUFFIX) && chmod +x dist/$(APP)_$(RELEASE_TAG)_$$(LINUX_$(1)_SUFFIX)'
-	@echo "Wrote $(DISTDIR)/$(APP)_$(RELEASE_TAG)_$$(LINUX_$(1)_SUFFIX)"
+		bash -c 'export PATH="/usr/local/cargo/bin:$$$$PATH"; cargo build --release && cp target/linux-$(1)/release/$(APP) dist/$(APP)_$$(LINUX_$(1)_SUFFIX) && chmod +x dist/$(APP)_$$(LINUX_$(1)_SUFFIX)'
+	@echo "Wrote $(DISTDIR)/$(APP)_$$(LINUX_$(1)_SUFFIX)"
 endef
 $(foreach arch,$(LINUX_ARCHS),$(eval $(call LINUX_DIST_RULE,$(arch))))
 
 .PHONY: dist-linux
-dist-linux: ## Build all precompiled Linux release assets
+dist-linux: ## Build all Linux binaries into dist/
 	@mkdir -p $(DISTDIR)
 	@for arch in $(LINUX_ARCHS); do \
-		$(MAKE) dist-linux.$$arch RELEASE_TAG=$(RELEASE_TAG) || exit $$?; \
+		$(MAKE) dist-linux.$$arch || exit $$?; \
 	done
 
-##@ Release
+##@ Distribution
 
 .PHONY: dist
-dist: ## Build all precompiled release assets
+dist: ## Build all local cross-platform binaries into dist/
 	@rm -rf $(DISTDIR)
 	@mkdir -p $(DISTDIR)
-	@$(MAKE) dist-darwin RELEASE_TAG=$(RELEASE_TAG)
-	@$(MAKE) dist-linux RELEASE_TAG=$(RELEASE_TAG)
-
-.PHONY: publish-release
-publish-release: ## Publish the assets already present in dist/ to GitHub Releases. Use TAG=v0.1.0.
-	@if [ -z "$(TAG)" ]; then \
-		echo "TAG is required. Example: make publish-release TAG=v0.1.0" >&2; \
-		exit 1; \
-	fi
-	@if ! ls $(DISTDIR)/* >/dev/null 2>&1; then \
-		echo "No release assets found in $(DISTDIR). Run make dist, make dist-darwin, or make dist-linux first." >&2; \
-		exit 1; \
-	fi
-	@if gh release view "$(TAG)" >/dev/null 2>&1; then \
-		echo "Uploading assets to existing release $(TAG)"; \
-		gh release upload "$(TAG)" $(DISTDIR)/* --clobber; \
-	else \
-		echo "Creating release $(TAG)"; \
-		gh release create "$(TAG)" $(DISTDIR)/* \
-			--title "$(TAG)" \
-			--notes "Release $(TAG)" \
-			--target "$$(git rev-parse HEAD)"; \
-	fi
-
-.PHONY: publish-release-main
-publish-release-main: ## Publish the assets already present in dist/ to the rolling main release
-	@$(MAKE) publish-release TAG="$(MAIN_TAG)"
-
-.PHONY: release
-release: ## Build all precompiled release assets and publish them. Use TAG=v0.1.0.
-	@if [ -z "$(TAG)" ]; then \
-		echo "TAG is required. Example: make release TAG=v0.1.0" >&2; \
-		exit 1; \
-	fi
-	@$(MAKE) dist RELEASE_TAG=$(TAG)
-	@$(MAKE) publish-release TAG=$(TAG)
-
-.PHONY: release-main
-release-main: ## Build all precompiled release assets and publish the rolling main release
-	@tag="$(MAIN_TAG)"; \
-	$(MAKE) dist RELEASE_TAG="$$tag"; \
-	$(MAKE) publish-release TAG="$$tag"
+	@$(MAKE) dist-darwin
+	@$(MAKE) dist-linux
 
 .PHONY: clean
-clean: ## Remove build artifacts
+clean: ## Remove build artifacts and the local gh extension entrypoint
 	@echo "Cleaning build artifacts"
+	@[ ! -L $(LOCAL_ENTRYPOINT) ] || rm -f $(LOCAL_ENTRYPOINT)
 	@rm -rf $(BINDIR) $(DISTDIR) .cargo-linux .home-linux
 	@$(CARGO) clean
 
@@ -201,10 +165,8 @@ help: ## Show this help message
 	@printf "  \033[36marm64\033[0m -> %s\n" "$(LINUX_arm64_PLATFORM)"
 	@printf "\n\033[1mExamples:\033[0m\n"
 	@printf "  \033[36mmake build\033[0m\n"
+	@printf "  \033[36mmake install-local\033[0m\n"
 	@printf "  \033[36mmake test\033[0m\n"
-	@printf "  \033[36mmake dist-darwin RELEASE_TAG=main-%s\033[0m\n" "$$(git rev-parse --short=12 HEAD 2>/dev/null || echo dev)"
-	@printf "  \033[36mmake dist-linux RELEASE_TAG=main-%s\033[0m\n" "$$(git rev-parse --short=12 HEAD 2>/dev/null || echo dev)"
-	@printf "  \033[36mmake dist RELEASE_TAG=main-%s\033[0m\n" "$$(git rev-parse --short=12 HEAD 2>/dev/null || echo dev)"
-	@printf "  \033[36mmake publish-release TAG=v0.1.0\033[0m\n"
-	@printf "  \033[36mmake release TAG=v0.1.0\033[0m\n"
-	@printf "  \033[36mmake release-main\033[0m\n"
+	@printf "  \033[36mmake dist-darwin\033[0m\n"
+	@printf "  \033[36mmake dist-linux\033[0m\n"
+	@printf "  \033[36mmake dist\033[0m\n"

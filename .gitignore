@@ -41,6 +41,7 @@ Temporary Items
 /target
 /bin
 /dist
+/gh-inbox
 /.cargo-linux
 /.home-linux
 
