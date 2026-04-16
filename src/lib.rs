@@ -2,7 +2,6 @@ mod cli;
 mod filter;
 mod github;
 mod model;
-mod output;
 mod progress;
 
 use std::io::{self, Write};
@@ -14,38 +13,14 @@ use crate::cli::{Cli, Commands, SweepArgs};
 use crate::filter::SweepFilters;
 use crate::github::{GitHubClient, HttpGitHubClient, resolve_auth_context};
 use crate::model::{NotificationThread, PullRequest};
-use crate::output::{ListRow, write_list};
 use crate::progress::SweepProgress;
 
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::List => run_list(),
         Commands::Sweep(args) => run_sweep(args),
     }
-}
-
-fn run_list() -> Result<()> {
-    let auth = resolve_auth_context()?;
-    let client = HttpGitHubClient::new(auth)?;
-    let notifications = client.list_notifications()?;
-
-    let rows = notifications
-        .iter()
-        .map(|thread| ListRow {
-            status: if thread.unread { "unread" } else { "read" },
-            reason: thread.reason.clone(),
-            repository: thread.repository.full_name.clone(),
-            subject: thread.subject_summary(),
-        })
-        .collect::<Vec<_>>();
-
-    let stdout = io::stdout();
-    let mut handle = stdout.lock();
-    write_list(&mut handle, &rows)?;
-    handle.flush()?;
-    Ok(())
 }
 
 fn run_sweep(args: SweepArgs) -> Result<()> {

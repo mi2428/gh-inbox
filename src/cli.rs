@@ -10,7 +10,6 @@ use clap::{Args, Parser, Subcommand};
     propagate_version = true,
     after_help = "\
 Examples:
-  gh inbox list
   gh inbox sweep
   gh inbox sweep --read
   gh inbox sweep --include-authored
@@ -25,8 +24,6 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
-    /// List notifications that are still in the inbox.
-    List,
     /// Mark matching notifications as done.
     Sweep(SweepArgs),
 }
@@ -46,7 +43,7 @@ pub struct SweepArgs {
     pub repo: Option<String>,
 
     /// Only sweep pull request notifications opened by the given user.
-    #[arg(long, value_name = "LOGIN")]
+    #[arg(long, value_name = "USER")]
     pub user: Option<String>,
 
     /// Only sweep notifications whose reason is team_mention.

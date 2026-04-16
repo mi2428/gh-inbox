@@ -15,7 +15,6 @@ Manage GitHub notifications from the inbox.
 Usage: gh inbox <COMMAND>
 
 Commands:
-  list   List notifications that are still in the inbox
   sweep  Mark matching notifications as done
 
 Options:
@@ -23,7 +22,6 @@ Options:
   -V, --version  Print version
 
 Examples:
-  gh inbox list
   gh inbox sweep
   gh inbox sweep --read
   gh inbox sweep --include-authored
@@ -44,7 +42,7 @@ Options:
       --read               Only sweep notifications that are already marked as read
       --closed             Only sweep pull request notifications whose pull requests are closed or merged
       --repo <OWNER/REPO>  Only sweep notifications from the given repository
-      --user <LOGIN>       Only sweep pull request notifications opened by the given user
+      --user <USER>        Only sweep pull request notifications opened by the given user
       --team-mentioned     Only sweep notifications whose reason is team_mention
       --no-mentioned       Only sweep notifications where the reason is not mention
       --include-authored   Also sweep pull request notifications authored by the authenticated user
