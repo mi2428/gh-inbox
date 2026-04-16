@@ -3,6 +3,7 @@ mod filter;
 mod github;
 mod model;
 mod output;
+mod progress;
 
 use std::io::{self, Write};
 
@@ -14,6 +15,7 @@ use crate::filter::SweepFilters;
 use crate::github::{GitHubClient, HttpGitHubClient, resolve_auth_context};
 use crate::model::{NotificationThread, PullRequest};
 use crate::output::{ListRow, write_list};
+use crate::progress::SweepProgress;
 
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
@@ -51,6 +53,7 @@ fn run_sweep(args: SweepArgs) -> Result<()> {
     let filters = SweepFilters::build(args, auth.login().to_owned())?;
     let client = HttpGitHubClient::new(auth)?;
     let notifications = client.list_notifications()?;
+    let filter_progress = SweepProgress::new(notifications.len(), "Filtering");
 
     let mut candidates = Vec::new();
     let mut metadata_failures = Vec::new();
@@ -60,6 +63,7 @@ fn run_sweep(args: SweepArgs) -> Result<()> {
             Ok(pr) => pr,
             Err(error) => {
                 metadata_failures.push((thread, error.to_string()));
+                filter_progress.inc(1);
                 continue;
             }
         };
@@ -67,7 +71,10 @@ fn run_sweep(args: SweepArgs) -> Result<()> {
         if filters.matches(&thread, pr.as_ref()) {
             candidates.push(thread);
         }
+
+        filter_progress.inc(1);
     }
+    filter_progress.finish();
 
     if !metadata_failures.is_empty() {
         let stderr = io::stderr();
@@ -91,6 +98,7 @@ fn run_sweep(args: SweepArgs) -> Result<()> {
 
     let mut failures = Vec::new();
     let mut done = 0usize;
+    let mark_progress = SweepProgress::new(candidates.len(), "Marking done");
 
     for thread in &candidates {
         match client.mark_thread_done(&thread.id) {
@@ -99,7 +107,9 @@ fn run_sweep(args: SweepArgs) -> Result<()> {
             }
             Err(error) => failures.push((thread.clone(), error.to_string())),
         }
+        mark_progress.inc(1);
     }
+    mark_progress.finish();
 
     println!("Marked {done} notification(s) as done.");
 
