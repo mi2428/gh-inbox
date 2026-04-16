@@ -8,6 +8,7 @@ RUSTC        := $(shell if command -v $(RUSTUP) >/dev/null 2>&1 && $(RUSTUP) whi
 RUSTDOC      := $(shell if command -v $(RUSTUP) >/dev/null 2>&1 && $(RUSTUP) which rustdoc >/dev/null 2>&1; then $(RUSTUP) which rustdoc; else command -v rustdoc; fi)
 CARGO_ENV    := RUSTC="$(RUSTC)" RUSTDOC="$(RUSTDOC)"
 APP          := gh-inbox
+EXTENSION    := $(patsubst gh-%,%,$(APP))
 GH           ?= gh
 GIT          ?= git
 REMOTE       ?= origin
@@ -50,9 +51,30 @@ build: ## Build the host binary into bin/
 	@echo "Wrote $(BINDIR)/$(APP)"
 
 .PHONY: install
-install: build ## Build the host binary and create the repo-root launcher for local gh extension installs
+install: build ## Build the host binary, create the repo-root launcher, and install the local gh extension
+	@command -v $(GH) >/dev/null 2>&1 || { \
+		echo "gh is required to install the extension" >&2; \
+		exit 1; \
+	}
 	@ln -sfn $(BINDIR)/$(APP) $(LOCAL_ENTRYPOINT)
 	@echo "Wrote $(LOCAL_ENTRYPOINT) -> $(BINDIR)/$(APP)"
+	@$(GH) extension install . --force
+
+.PHONY: uninstall
+uninstall: ## Remove the local gh extension and delete the repo-root launcher
+	@command -v $(GH) >/dev/null 2>&1 || { \
+		echo "gh is required to uninstall the extension" >&2; \
+		exit 1; \
+	}
+	@if $(GH) extension list | awk '{print $$1 " " $$2}' | grep -Fxq "gh $(EXTENSION)"; then \
+		$(GH) extension remove $(EXTENSION); \
+	else \
+		echo "gh extension $(EXTENSION) is not installed"; \
+	fi
+	@if [ -L $(LOCAL_ENTRYPOINT) ]; then \
+		rm -f $(LOCAL_ENTRYPOINT); \
+		echo "Removed $(LOCAL_ENTRYPOINT)"; \
+	fi
 
 .PHONY: fmt
 fmt: ## Format the Rust sources
@@ -237,9 +259,7 @@ help: ## Show this help message
 	@printf "\n\033[1mExamples:\033[0m\n"
 	@printf "  \033[36mmake build\033[0m\n"
 	@printf "  \033[36mmake install\033[0m\n"
-	@printf "  \033[36mmake test\033[0m\n"
 	@printf "  \033[36mmake dist OS=darwin\033[0m\n"
-	@printf "  \033[36mmake dist OS=linux ARCH=arm64\033[0m\n"
 	@printf "  \033[36mmake dist OS=darwin,linux ARCH=amd64,arm64\033[0m\n"
 	@printf "  \033[36mmake -n release\033[0m\n"
 	@printf "  \033[36mmake release\033[0m\n"

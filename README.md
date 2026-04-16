@@ -13,15 +13,20 @@ By default, `gh inbox sweep` protects notifications for pull requests authored b
 
 ## Local installation
 
-Build the host binary, create the repository-root launcher for local installs, then install the extension from the current checkout:
+Install the extension from the current checkout with:
 
 ```console
 make install
-gh extension install .
 gh inbox --help
 ```
 
-After source changes, run `make install` again to refresh both `bin/gh-inbox` and the repository-root launcher.
+`make install` builds `bin/gh-inbox`, refreshes the repository-root launcher, and runs `gh extension install . --force`.
+
+To remove the local extension registration and the repository-root launcher:
+
+```console
+make uninstall
+```
 
 ## Remote installation
 
@@ -81,7 +86,8 @@ $ make help
 
 Development
   build        Build the host binary into bin/
-  install      Build the host binary and create the repo-root launcher for local gh extension installs
+  install      Build the host binary, create the repo-root launcher, and install the local gh extension
+  uninstall    Remove the local gh extension and delete the repo-root launcher
   fmt          Format the Rust sources
   fmt-check    Verify formatting without changing files
   lint         Run clippy with warnings treated as errors
@@ -108,6 +114,7 @@ Linux Architectures:
 Examples:
   make build
   make install
+  make uninstall
   make test
   make dist OS=darwin
   make dist OS=linux ARCH=arm64
