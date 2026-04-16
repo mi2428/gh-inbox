@@ -11,6 +11,7 @@ use clap::{Args, Parser, Subcommand};
     after_help = "\
 Examples:
   gh inbox sweep
+  gh inbox sweep --read
   gh inbox sweep --include-authored
   gh inbox sweep --closed --repo mi2428/helloworld --user renovate
   gh inbox sweep --team-mentioned --no-mentioned
@@ -29,6 +30,10 @@ pub enum Commands {
 
 #[derive(Debug, Args, Clone, PartialEq, Eq)]
 pub struct SweepArgs {
+    /// Only sweep notifications that are already marked as read. To control API cost, this scans only the most recent 100 notifications. Run the command again if older read notifications remain.
+    #[arg(long)]
+    pub read: bool,
+
     /// Only sweep pull request notifications whose pull requests are closed or merged.
     #[arg(long)]
     pub closed: bool,

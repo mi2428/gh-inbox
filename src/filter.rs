@@ -5,6 +5,7 @@ use crate::model::{NotificationThread, PullRequest, RepoRef};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SweepFilters {
+    pub read: bool,
     pub closed: bool,
     pub repo: Option<RepoRef>,
     pub user: Option<String>,
@@ -17,6 +18,7 @@ pub struct SweepFilters {
 impl SweepFilters {
     pub fn build(args: SweepArgs, viewer_login: String) -> Result<Self> {
         Ok(Self {
+            read: args.read,
             closed: args.closed,
             repo: args.repo.map(|repo| RepoRef::parse(&repo)).transpose()?,
             user: args.user,
@@ -34,6 +36,10 @@ impl SweepFilters {
     }
 
     pub fn matches(&self, thread: &NotificationThread, pr: Option<&PullRequest>) -> bool {
+        if self.read && thread.unread {
+            return false;
+        }
+
         if let Some(repo) = &self.repo
             && !repo.matches(&thread.repository.full_name)
         {
@@ -95,6 +101,7 @@ mod tests {
 
     fn sweep_args() -> SweepArgs {
         SweepArgs {
+            read: false,
             closed: false,
             repo: None,
             user: None,
@@ -143,10 +150,22 @@ mod tests {
         }
     }
 
+    fn read_thread(
+        reason: &str,
+        repo: &str,
+        subject_type: &str,
+        subject_url: Option<&str>,
+    ) -> NotificationThread {
+        let mut thread = thread(reason, repo, subject_type, subject_url);
+        thread.unread = false;
+        thread
+    }
+
     #[test]
     fn builds_filters_from_args() {
         let filters = SweepFilters::build(
             SweepArgs {
+                read: true,
                 closed: true,
                 repo: Some("cli/cli".to_owned()),
                 user: Some("monalisa".to_owned()),
@@ -158,6 +177,7 @@ mod tests {
         )
         .expect("built filters");
 
+        assert!(filters.read);
         assert!(filters.closed);
         assert_eq!(filters.repo.expect("repo").to_string(), "cli/cli");
         assert_eq!(filters.user.expect("user"), "monalisa");
@@ -194,6 +214,33 @@ mod tests {
         );
 
         assert!(filters.matches(&thread, None));
+    }
+
+    #[test]
+    fn read_filter_only_matches_read_notifications() {
+        let filters = SweepFilters {
+            read: true,
+            ..SweepFilters::default()
+        };
+
+        assert!(filters.matches(
+            &read_thread(
+                "comment",
+                "cli/cli",
+                "Issue",
+                Some("https://api.github.com/repos/cli/cli/issues/1")
+            ),
+            None
+        ));
+        assert!(!filters.matches(
+            &thread(
+                "comment",
+                "cli/cli",
+                "Issue",
+                Some("https://api.github.com/repos/cli/cli/issues/1")
+            ),
+            None
+        ));
     }
 
     #[test]
@@ -354,6 +401,7 @@ mod tests {
     #[test]
     fn combined_filters_are_anded() {
         let filters = SweepFilters {
+            read: true,
             closed: true,
             repo: Some(crate::model::RepoRef::parse("cli/cli").expect("repo")),
             user: Some("monalisa".to_owned()),
@@ -362,7 +410,7 @@ mod tests {
             include_authored: true,
             viewer_login: Some("hubot".to_owned()),
         };
-        let thread = thread(
+        let thread = read_thread(
             "team_mention",
             "cli/cli",
             "PullRequest",

@@ -13,9 +13,10 @@ use crate::model::{NotificationThread, PullRequest, RepoRef};
 
 const API_VERSION: &str = "2022-11-28";
 const USER_NOTIFICATIONS_PER_PAGE: usize = 50;
+const READ_SWEEP_LIMIT: usize = 100;
 
 pub trait GitHubClient {
-    fn list_notifications(&self) -> Result<Vec<NotificationThread>>;
+    fn list_notifications(&self, include_read: bool) -> Result<Vec<NotificationThread>>;
     fn get_pull_request(&self, repo: &RepoRef, number: u64) -> Result<PullRequest>;
     fn mark_thread_done(&self, thread_id: &str) -> Result<()>;
 }
@@ -87,21 +88,32 @@ impl HttpGitHubClient {
 }
 
 impl GitHubClient for HttpGitHubClient {
-    fn list_notifications(&self) -> Result<Vec<NotificationThread>> {
+    fn list_notifications(&self, include_read: bool) -> Result<Vec<NotificationThread>> {
         let mut page = 1usize;
+        let mut remaining = include_read.then_some(READ_SWEEP_LIMIT);
         let mut threads = Vec::new();
 
         loop {
-            let path = format!(
-                "notifications?all=false&per_page={USER_NOTIFICATIONS_PER_PAGE}&page={page}"
-            );
+            let per_page = remaining
+                .map(|remaining| remaining.min(USER_NOTIFICATIONS_PER_PAGE))
+                .unwrap_or(USER_NOTIFICATIONS_PER_PAGE);
+            let path = notifications_path(include_read, per_page, page);
             let response = self
                 .request(Method::GET, &path)
                 .send()
                 .with_context(|| format!("request to {path} failed"))?;
             let next_page = next_page_number(response.headers());
             let page_items: Vec<NotificationThread> = decode_json(response, &path)?;
+            let count = page_items.len();
             threads.extend(page_items);
+
+            if let Some(remaining_items) = remaining.as_mut() {
+                *remaining_items = remaining_items.saturating_sub(count);
+
+                if *remaining_items == 0 {
+                    break;
+                }
+            }
 
             match next_page {
                 Some(next_page) => page = next_page,
@@ -121,6 +133,11 @@ impl GitHubClient for HttpGitHubClient {
         let path = format!("notifications/threads/{thread_id}");
         self.empty(Method::DELETE, &path)
     }
+}
+
+fn notifications_path(include_read: bool, per_page: usize, page: usize) -> String {
+    let all = if include_read { "true" } else { "false" };
+    format!("notifications?all={all}&per_page={per_page}&page={page}")
 }
 
 fn decode_json<T: for<'de> Deserialize<'de>>(response: Response, path: &str) -> Result<T> {
@@ -269,8 +286,8 @@ struct AuthHostEntry {
 #[cfg(test)]
 mod tests {
     use super::{
-        AuthHostEntry, api_base_for_host, next_page_number_from_link, parse_next_page_link,
-        select_account,
+        AuthHostEntry, api_base_for_host, next_page_number_from_link, notifications_path,
+        parse_next_page_link, select_account,
     };
     use std::collections::BTreeMap;
 
@@ -322,8 +339,24 @@ mod tests {
     }
 
     #[test]
+    fn builds_unread_notifications_path() {
+        assert_eq!(
+            notifications_path(false, 50, 1),
+            "notifications?all=false&per_page=50&page=1"
+        );
+    }
+
+    #[test]
+    fn builds_read_notifications_path() {
+        assert_eq!(
+            notifications_path(true, 50, 2),
+            "notifications?all=true&per_page=50&page=2"
+        );
+    }
+
+    #[test]
     fn parses_next_page_from_link_header() {
-        let link = "<https://api.github.com/notifications?all=false&per_page=50&page=2>; rel=\"next\", <https://api.github.com/notifications?all=false&per_page=50&page=24>; rel=\"last\"";
+        let link = "<https://api.github.com/notifications?all=true&per_page=50&page=2>; rel=\"next\", <https://api.github.com/notifications?all=true&per_page=50&page=24>; rel=\"last\"";
 
         assert_eq!(next_page_number_from_link(link), Some(2));
     }
@@ -331,12 +364,12 @@ mod tests {
     #[test]
     fn ignores_non_next_link_entries() {
         let link =
-            "<https://api.github.com/notifications?all=false&per_page=50&page=24>; rel=\"last\"";
+            "<https://api.github.com/notifications?all=true&per_page=50&page=24>; rel=\"last\"";
 
         assert_eq!(next_page_number_from_link(link), None);
         assert_eq!(
             parse_next_page_link(
-                "<https://api.github.com/notifications?all=false&per_page=50&page=24>; rel=\"last\""
+                "<https://api.github.com/notifications?all=true&per_page=50&page=24>; rel=\"last\""
             ),
             None
         );

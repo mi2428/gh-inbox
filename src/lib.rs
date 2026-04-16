@@ -24,10 +24,11 @@ pub fn run() -> Result<()> {
 }
 
 fn run_sweep(args: SweepArgs) -> Result<()> {
+    let include_read = args.read;
     let auth = resolve_auth_context()?;
     let filters = SweepFilters::build(args, auth.login().to_owned())?;
     let client = HttpGitHubClient::new(auth)?;
-    let notifications = client.list_notifications()?;
+    let notifications = client.list_notifications(include_read)?;
     let filter_progress = SweepProgress::new(notifications.len(), "Filtering");
 
     let mut candidates = Vec::new();
