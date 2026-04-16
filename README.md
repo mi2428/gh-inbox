@@ -36,7 +36,7 @@ Maintainers can publish a release for the latest commit on `origin/main` with:
 make release
 ```
 
-That command fetches `origin/main`, builds Darwin and Linux binaries for all supported architectures from that commit in a temporary worktree, and uploads all of them to a GitHub Release. After that, users can install the extension remotely with:
+That command fetches `origin/main`, reads `package.version` from `Cargo.toml`, turns it into a `vX.Y.Z` tag, builds Darwin and Linux binaries for all supported architectures from that commit in a temporary worktree, and uploads all of them to a GitHub Release. If that release or tag already exists, the command fails instead of mutating an existing versioned release. After that, users can install the extension remotely with:
 
 ```console
 gh extension install OWNER/gh-inbox
@@ -82,7 +82,7 @@ Examples:
 ## Development help
 
 ```console
-$ make help
+$ make
 
 Development
   build        Build the host binary into bin/
@@ -98,29 +98,18 @@ Distribution
   clean        Remove build artifacts and the local launcher
 
 Release
-  release      Build all binaries from the latest origin/main commit and publish a GitHub Release
+  release      Build all binaries for the version in Cargo.toml on origin/main and publish a GitHub Release
 
 Help
   help         Show this help message
 
-Darwin Architectures:
-  amd64        x86_64-apple-darwin
-  arm64        aarch64-apple-darwin
-
-Linux Architectures:
-  amd64        linux/amd64
-  arm64        linux/arm64
-
 Examples:
   make build
-  make install
-  make uninstall
-  make test
+  make clean install
   make dist OS=darwin
-  make dist OS=linux ARCH=arm64
   make dist OS=darwin,linux ARCH=amd64,arm64
   make -n release
-  make release
+  make releasee
 ```
 
 If `OS` includes `darwin`, `make dist` requires `rustup` so the Darwin Rust targets can be installed automatically.
@@ -128,3 +117,5 @@ If `OS` includes `darwin`, `make dist` requires `rustup` so the Darwin Rust targ
 If `OS` includes `linux`, `make dist` requires Docker. It builds Linux binaries inside the official Rust container and supports both `linux/amd64` and `linux/arm64`.
 
 `make release` requires a GitHub repository remote named `origin`, a `main` branch on that remote, and an authenticated `gh` session with permission to create releases.
+
+`Cargo.toml` is the single source of truth for the application version. Update `package.version` before cutting a new release.

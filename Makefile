@@ -202,23 +202,26 @@ _publish-release:
 		echo "TARGET_SHA is required for the release upload step" >&2; \
 		exit 1; \
 	fi
+	@if $(GH) release view "$(TAG)" >/dev/null 2>&1; then \
+		echo "Release $(TAG) already exists" >&2; \
+		exit 1; \
+	fi
+	@if $(GIT) ls-remote --exit-code --tags "$(REMOTE)" "refs/tags/$(TAG)" >/dev/null 2>&1; then \
+		echo "Tag $(TAG) already exists on $(REMOTE)" >&2; \
+		exit 1; \
+	fi
 	@if ! ls $(DISTDIR)/$(APP)-* >/dev/null 2>&1; then \
 		echo "No release assets found in $(DISTDIR). Run make dist first." >&2; \
 		exit 1; \
 	fi
-	@if $(GH) release view "$(TAG)" >/dev/null 2>&1; then \
-		echo "Uploading assets to existing release $(TAG)"; \
-		$(GH) release upload "$(TAG)" $(DISTDIR)/$(APP)-* --clobber; \
-	else \
-		echo "Creating release $(TAG) at $(TARGET_SHA)"; \
-		$(GH) release create "$(TAG)" $(DISTDIR)/$(APP)-* \
-			--target "$(TARGET_SHA)" \
-			--title "$(TAG)" \
-			--notes "Release $(TAG) built from $(TARGET_SHA)"; \
-	fi
+	@echo "Creating release $(TAG) at $(TARGET_SHA)"
+	@$(GH) release create "$(TAG)" $(DISTDIR)/$(APP)-* \
+		--target "$(TARGET_SHA)" \
+		--title "$(TAG)" \
+		--notes "Release $(TAG) built from $(TARGET_SHA)"
 
 .PHONY: release
-release: ## Build all binaries from the latest origin/main commit and publish a GitHub Release
+release: ## Build all binaries for the version in Cargo.toml on origin/main and publish a GitHub Release
 	@command -v $(GIT) >/dev/null 2>&1 || { \
 		echo "git is required to create a release" >&2; \
 		exit 1; \
@@ -230,10 +233,14 @@ release: ## Build all binaries from the latest origin/main commit and publish a 
 	echo "Fetching $(REMOTE)/$(MAIN_BRANCH)"; \
 	$(GIT) fetch $(REMOTE) $(MAIN_BRANCH); \
 	main_sha="$$($(GIT) rev-parse "$$main_ref")"; \
-	main_short="$$($(GIT) rev-parse --short=12 "$$main_sha")"; \
-	tag="main-$$main_short"; \
 	echo "Preparing worktree for $$main_sha"; \
 	$(GIT) worktree add --force --detach "$$tmpdir" "$$main_sha" >/dev/null; \
+	release_version="$$(awk 'BEGIN { in_pkg = 0 } /^\[package\]$$/ { in_pkg = 1; next } /^\[/ { in_pkg = 0 } in_pkg && $$1 == \"version\" { gsub(/\"/, \"\", $$3); print $$3; exit }' "$$tmpdir/Cargo.toml")"; \
+	if [ -z "$$release_version" ]; then \
+		echo "failed to read package.version from $$tmpdir/Cargo.toml" >&2; \
+		exit 1; \
+	fi; \
+	tag="v$$release_version"; \
 	echo "Building release assets for $$tag"; \
 	"$$make_bin" -f "$(CURDIR)/Makefile" -C "$$tmpdir" dist OS=darwin,linux ARCH=amd64,arm64; \
 	echo "Publishing $$tag"; \
@@ -250,15 +257,9 @@ help: ## Show this help message
 		printf "  \033[36m%-11s\033[0m %s\n", $$1, $$2; next \
 	} \
 	/^##@/ { section = substr($$0, 5); next }' $(MAKEFILE_LIST)
-	@printf "\n\033[1mDarwin Architectures:\033[0m\n"
-	@printf "  \033[36m%-12s\033[0m %s\n" "amd64" "$(DARWIN_amd64_TARGET)"
-	@printf "  \033[36m%-12s\033[0m %s\n" "arm64" "$(DARWIN_arm64_TARGET)"
-	@printf "\n\033[1mLinux Architectures:\033[0m\n"
-	@printf "  \033[36m%-12s\033[0m %s\n" "amd64" "$(LINUX_amd64_PLATFORM)"
-	@printf "  \033[36m%-12s\033[0m %s\n" "arm64" "$(LINUX_arm64_PLATFORM)"
 	@printf "\n\033[1mExamples:\033[0m\n"
 	@printf "  \033[36mmake build\033[0m\n"
-	@printf "  \033[36mmake install\033[0m\n"
+	@printf "  \033[36mmake clean install\033[0m\n"
 	@printf "  \033[36mmake dist OS=darwin\033[0m\n"
 	@printf "  \033[36mmake dist OS=darwin,linux ARCH=amd64,arm64\033[0m\n"
 	@printf "  \033[36mmake -n release\033[0m\n"
