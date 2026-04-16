@@ -1,60 +1,12 @@
 # gh-inbox
 
-`gh-inbox` is a GitHub CLI extension implemented in Rust for clearing a noisy notifications inbox.
+ A GitHub CLI extension implemented in Rust for clearing a noisy notifications inbox.
 
-This repository is intended to be built locally by developers. Maintainers can also publish a remote-installable GitHub Release directly from the `Makefile`.
-
-The extension currently provides two commands:
-
-- `gh inbox list`
-- `gh inbox sweep`
-
-By default, `gh inbox sweep` protects notifications for pull requests authored by the authenticated user. Use `--include-authored` to include them in a sweep.
-
-## Local installation
-
-Install the extension from the current checkout with:
+ ## Getting Started
 
 ```console
-make install
-gh inbox --help
+$ gh extension install mi2428/gh-inbox
 ```
-
-`make install` builds `bin/gh-inbox`, refreshes the repository-root launcher, and runs `gh extension install . --force`.
-
-To remove the local extension registration and the repository-root launcher:
-
-```console
-make uninstall
-```
-
-## Remote installation
-
-Maintainers can publish a release for the latest commit on `origin/main` with:
-
-```console
-make release
-```
-
-That command fetches `origin/main`, reads `package.version` from `Cargo.toml`, turns it into a `vX.Y.Z` tag, builds Darwin and Linux binaries for all supported architectures from that commit in a temporary worktree, and uploads all of them to a GitHub Release. If that release or tag already exists, the command fails instead of mutating an existing versioned release. After that, users can install the extension remotely with:
-
-```console
-gh extension install OWNER/gh-inbox
-```
-
-## Local binary builds
-
-Use `make dist` when you want local cross-built binaries under `dist/`:
-
-```console
-make dist OS=darwin
-make dist OS=linux ARCH=arm64
-make dist OS=darwin,linux ARCH=amd64,arm64
-```
-
-The generated binaries use filenames such as `dist/gh-inbox-darwin-amd64` and `dist/gh-inbox-linux-arm64`.
-
-## CLI help
 
 ```console
 $ gh inbox --help
@@ -79,7 +31,28 @@ Examples:
   gh inbox sweep --team-mentioned --no-mentioned
 ```
 
-## Development help
+By default, `gh inbox sweep` protects notifications for pull requests authored by the authenticated user.
+Use `--include-authored` to include them in a sweep.
+
+```console
+$ gh inbox sweep --help
+Mark matching notifications as done
+
+Usage: gh inbox sweep [OPTIONS]
+
+Options:
+      --read               Only sweep notifications that are already marked as read
+      --closed             Only sweep pull request notifications whose pull requests are closed or merged
+      --repo <OWNER/REPO>  Only sweep notifications from the given repository
+      --user <LOGIN>       Only sweep pull request notifications opened by the given user
+      --team-mentioned     Only sweep notifications whose reason is team_mention
+      --no-mentioned       Only sweep notifications where the reason is not mention
+      --include-authored   Also sweep pull request notifications authored by the authenticated user
+  -h, --help               Print help
+  -V, --version            Print version
+```
+
+## Development
 
 ```console
 $ make
@@ -112,10 +85,6 @@ Examples:
   make releasee
 ```
 
-If `OS` includes `darwin`, `make dist` requires `rustup` so the Darwin Rust targets can be installed automatically.
+## License
 
-If `OS` includes `linux`, `make dist` requires Docker. It builds Linux binaries inside the official Rust container and supports both `linux/amd64` and `linux/arm64`.
-
-`make release` requires a GitHub repository remote named `origin`, a `main` branch on that remote, and an authenticated `gh` session with permission to create releases.
-
-`Cargo.toml` is the single source of truth for the application version. Update `package.version` before cutting a new release.
+MIT License. See [LICENSE](LICENSE) for details.
