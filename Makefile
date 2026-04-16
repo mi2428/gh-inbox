@@ -235,7 +235,7 @@ release: ## Build all binaries for the version in Cargo.toml on origin/main and 
 	main_sha="$$($(GIT) rev-parse "$$main_ref")"; \
 	echo "Preparing worktree for $$main_sha"; \
 	$(GIT) worktree add --force --detach "$$tmpdir" "$$main_sha" >/dev/null; \
-	release_version="$$(awk 'BEGIN { in_pkg = 0 } /^\[package\]$$/ { in_pkg = 1; next } /^\[/ { in_pkg = 0 } in_pkg && $$1 == \"version\" { gsub(/\"/, \"\", $$3); print $$3; exit }' "$$tmpdir/Cargo.toml")"; \
+	release_version="$$(awk 'BEGIN { in_pkg = 0 } /^\[package\]$$/ { in_pkg = 1; next } /^\[/ { in_pkg = 0 } in_pkg && $$1 == "version" { gsub(/"/, "", $$3); print $$3; exit }' "$$tmpdir/Cargo.toml")"; \
 	if [ -z "$$release_version" ]; then \
 		echo "failed to read package.version from $$tmpdir/Cargo.toml" >&2; \
 		exit 1; \
