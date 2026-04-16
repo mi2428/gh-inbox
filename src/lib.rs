@@ -34,9 +34,15 @@ fn run_sweep(args: SweepArgs) -> Result<()> {
     let mut metadata_failures = Vec::new();
 
     for thread in notifications {
+        let descriptor = format!(
+            "{}  {}",
+            thread.repository.full_name,
+            thread.subject_summary()
+        );
         let pr = match pr_metadata_for_thread(&client, &filters, &thread) {
             Ok(pr) => pr,
             Err(error) => {
+                filter_progress.println(format!("skipped  {descriptor}  ({error})"));
                 metadata_failures.push((thread, error.to_string()));
                 filter_progress.inc(1);
                 continue;
@@ -44,14 +50,17 @@ fn run_sweep(args: SweepArgs) -> Result<()> {
         };
 
         if filters.matches(&thread, pr.as_ref()) {
+            filter_progress.println(format!("matched  {descriptor}"));
             candidates.push(thread);
+        } else {
+            filter_progress.println(format!("ignored  {descriptor}"));
         }
 
         filter_progress.inc(1);
     }
     filter_progress.finish();
 
-    if !metadata_failures.is_empty() {
+    if !metadata_failures.is_empty() && !filter_progress.is_enabled() {
         let stderr = io::stderr();
         let mut handle = stderr.lock();
         for (thread, error) in &metadata_failures {
@@ -79,6 +88,11 @@ fn run_sweep(args: SweepArgs) -> Result<()> {
         match client.mark_thread_done(&thread.id) {
             Ok(()) => {
                 done += 1;
+                mark_progress.println(format!(
+                    "marked  {}  {}",
+                    thread.repository.full_name,
+                    thread.subject_summary()
+                ));
             }
             Err(error) => failures.push((thread.clone(), error.to_string())),
         }

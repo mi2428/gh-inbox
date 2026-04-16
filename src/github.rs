@@ -5,11 +5,14 @@ use std::process::Command;
 use anyhow::{Context, Result, anyhow, bail};
 use reqwest::Method;
 use reqwest::blocking::{Client, Response};
+use reqwest::header::{HeaderMap, LINK};
 use serde::Deserialize;
+use url::Url;
 
 use crate::model::{NotificationThread, PullRequest, RepoRef};
 
 const API_VERSION: &str = "2022-11-28";
+const USER_NOTIFICATIONS_PER_PAGE: usize = 50;
 
 pub trait GitHubClient {
     fn list_notifications(&self) -> Result<Vec<NotificationThread>>;
@@ -89,16 +92,21 @@ impl GitHubClient for HttpGitHubClient {
         let mut threads = Vec::new();
 
         loop {
-            let path = format!("notifications?all=true&per_page=100&page={page}");
-            let page_items: Vec<NotificationThread> = self.json(Method::GET, &path)?;
-            let count = page_items.len();
+            let path = format!(
+                "notifications?all=true&per_page={USER_NOTIFICATIONS_PER_PAGE}&page={page}"
+            );
+            let response = self
+                .request(Method::GET, &path)
+                .send()
+                .with_context(|| format!("request to {path} failed"))?;
+            let next_page = next_page_number(response.headers());
+            let page_items: Vec<NotificationThread> = decode_json(response, &path)?;
             threads.extend(page_items);
 
-            if count < 100 {
-                break;
+            match next_page {
+                Some(next_page) => page = next_page,
+                None => break,
             }
-
-            page += 1;
         }
 
         Ok(threads)
@@ -136,6 +144,35 @@ fn decode_empty(response: Response, path: &str) -> Result<()> {
     }
 
     bail!("{} returned {}: {}", path, status, body.trim())
+}
+
+fn next_page_number(headers: &HeaderMap) -> Option<usize> {
+    let value = headers.get(LINK)?.to_str().ok()?;
+    next_page_number_from_link(value)
+}
+
+fn next_page_number_from_link(link: &str) -> Option<usize> {
+    link.split(',').find_map(parse_next_page_link)
+}
+
+fn parse_next_page_link(link_entry: &str) -> Option<usize> {
+    let mut parts = link_entry.split(';').map(str::trim);
+    let url_part = parts.next()?;
+
+    if !parts.any(|part| part == "rel=\"next\"") {
+        return None;
+    }
+
+    let url = url_part.strip_prefix('<')?.strip_suffix('>')?;
+    let url = Url::parse(url).ok()?;
+
+    url.query_pairs().find_map(|(key, value)| {
+        if key == "page" {
+            value.parse::<usize>().ok()
+        } else {
+            None
+        }
+    })
 }
 
 pub fn resolve_auth_context() -> Result<AuthContext> {
@@ -231,7 +268,10 @@ struct AuthHostEntry {
 
 #[cfg(test)]
 mod tests {
-    use super::{AuthHostEntry, api_base_for_host, select_account};
+    use super::{
+        AuthHostEntry, api_base_for_host, next_page_number_from_link, parse_next_page_link,
+        select_account,
+    };
     use std::collections::BTreeMap;
 
     fn account(host: &str, active: bool) -> AuthHostEntry {
@@ -278,6 +318,27 @@ mod tests {
         assert_eq!(
             api_base_for_host("ghe.example.com"),
             "https://ghe.example.com/api/v3"
+        );
+    }
+
+    #[test]
+    fn parses_next_page_from_link_header() {
+        let link = "<https://api.github.com/notifications?all=true&per_page=50&page=2>; rel=\"next\", <https://api.github.com/notifications?all=true&per_page=50&page=24>; rel=\"last\"";
+
+        assert_eq!(next_page_number_from_link(link), Some(2));
+    }
+
+    #[test]
+    fn ignores_non_next_link_entries() {
+        let link =
+            "<https://api.github.com/notifications?all=true&per_page=50&page=24>; rel=\"last\"";
+
+        assert_eq!(next_page_number_from_link(link), None);
+        assert_eq!(
+            parse_next_page_link(
+                "<https://api.github.com/notifications?all=true&per_page=50&page=24>; rel=\"last\""
+            ),
+            None
         );
     }
 }
