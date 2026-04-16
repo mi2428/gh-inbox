@@ -2,7 +2,7 @@
 
 `gh-inbox` is a GitHub CLI extension implemented in Rust for clearing a noisy notifications inbox.
 
-This repository is intended to be built and installed from a local checkout.
+This repository is intended to be built locally by developers. Maintainers can also publish a remote-installable GitHub Release directly from the `Makefile`.
 
 The extension currently provides two commands:
 
@@ -13,32 +13,46 @@ By default, `gh inbox sweep` protects notifications for pull requests authored b
 
 ## Local installation
 
-Build the host binary, create the repository-root entrypoint that `gh extension install .` expects, then install the extension from the current checkout:
+Build the host binary, create the repository-root launcher for local installs, then install the extension from the current checkout:
 
 ```console
-make install-local
+make install
 gh extension install .
 gh inbox --help
 ```
 
-After source changes, run `make build` to refresh `bin/gh-inbox`. Run `make install-local` again if you want to recreate the repository-root entrypoint.
+After source changes, run `make install` again to refresh both `bin/gh-inbox` and the repository-root launcher.
+
+## Remote installation
+
+Maintainers can publish a release for the latest commit on `origin/main` with:
+
+```console
+make release
+```
+
+That command fetches `origin/main`, builds Darwin and Linux binaries for all supported architectures from that commit in a temporary worktree, and uploads all of them to a GitHub Release. After that, users can install the extension remotely with:
+
+```console
+gh extension install OWNER/gh-inbox
+```
 
 ## Local binary builds
 
-Use the `dist` targets when you want local cross-built binaries under `dist/`:
+Use `make dist` when you want local cross-built binaries under `dist/`:
 
 ```console
-make dist-darwin
-make dist-linux
-make dist
+make dist OS=darwin
+make dist OS=linux ARCH=arm64
+make dist OS=darwin,linux ARCH=amd64,arm64
 ```
 
-The generated binaries use filenames such as `dist/gh-inbox_darwin-amd64` and `dist/gh-inbox_linux-arm64`.
+The generated binaries use filenames such as `dist/gh-inbox-darwin-amd64` and `dist/gh-inbox-linux-arm64`.
 
 ## CLI help
 
 ```console
-$ cargo run -- --help
+$ gh inbox --help
 Manage GitHub notifications from the inbox.
 
 Usage: gh inbox <COMMAND>
@@ -56,26 +70,8 @@ Examples:
   gh inbox sweep
   gh inbox sweep --read
   gh inbox sweep --include-authored
-  gh inbox sweep --closed --repo cli/cli --user monalisa
+  gh inbox sweep --closed --repo mi2428/helloworld --user renovate
   gh inbox sweep --team-mentioned --no-mentioned
-```
-
-```console
-$ cargo run -- sweep --help
-Mark matching notifications as done
-
-Usage: gh inbox sweep [OPTIONS]
-
-Options:
-      --read               Only sweep notifications that are already marked as read
-      --closed             Only sweep pull request notifications whose pull requests are closed or merged
-      --repo <OWNER/REPO>  Only sweep notifications from the given repository
-      --user <LOGIN>       Only sweep pull request notifications opened by the given user
-      --team-mentioned     Only sweep notifications whose reason is team_mention
-      --no-mentioned       Only sweep notifications where the reason is not mention
-      --include-authored   Also sweep pull request notifications authored by the authenticated user
-  -h, --help               Print help
-  -V, --version            Print version
 ```
 
 ## Development help
@@ -84,40 +80,44 @@ Options:
 $ make help
 
 Development
-  build           Build the host binary into bin/
-  install-local   Build the host binary and create the repo-root entrypoint for gh extension install .
-  fmt             Format the Rust sources
-  fmt-check       Verify formatting without changing files
-  lint            Run clippy with warnings treated as errors
-  test            Run the unit test suite
-  docker-check    Verify that Docker is available for Linux cross-builds
-  dist-darwin     Build all Darwin binaries into dist/
-  dist-linux      Build all Linux binaries into dist/
+  build        Build the host binary into bin/
+  install      Build the host binary and create the repo-root launcher for local gh extension installs
+  fmt          Format the Rust sources
+  fmt-check    Verify formatting without changing files
+  lint         Run clippy with warnings treated as errors
+  test         Run the unit test suite
 
 Distribution
-  dist            Build all local cross-platform binaries into dist/
-  clean           Remove build artifacts and the local gh extension entrypoint
+  dist         Build binaries into dist/. Use OS=darwin,linux and ARCH=amd64,arm64.
+  clean        Remove build artifacts and the local launcher
+
+Release
+  release      Build all binaries from the latest origin/main commit and publish a GitHub Release
 
 Help
-  help            Show this help message
+  help         Show this help message
 
 Darwin Architectures:
-  amd64 -> x86_64-apple-darwin
-  arm64 -> aarch64-apple-darwin
+  amd64        x86_64-apple-darwin
+  arm64        aarch64-apple-darwin
 
 Linux Architectures:
-  amd64 -> linux/amd64
-  arm64 -> linux/arm64
+  amd64        linux/amd64
+  arm64        linux/arm64
 
 Examples:
   make build
-  make install-local
+  make install
   make test
-  make dist-darwin
-  make dist-linux
-  make dist
+  make dist OS=darwin
+  make dist OS=linux ARCH=arm64
+  make dist OS=darwin,linux ARCH=amd64,arm64
+  make -n release
+  make release
 ```
 
-`make dist-darwin` requires `rustup` so the Darwin Rust targets can be installed automatically.
+If `OS` includes `darwin`, `make dist` requires `rustup` so the Darwin Rust targets can be installed automatically.
 
-`make dist-linux` requires Docker. It builds Linux binaries inside the official Rust container and supports both `linux/amd64` and `linux/arm64`.
+If `OS` includes `linux`, `make dist` requires Docker. It builds Linux binaries inside the official Rust container and supports both `linux/amd64` and `linux/arm64`.
+
+`make release` requires a GitHub repository remote named `origin`, a `main` branch on that remote, and an authenticated `gh` session with permission to create releases.
