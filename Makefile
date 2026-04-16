@@ -241,4 +241,5 @@ help: ## Show this help message
 	@printf "  \033[36mmake dist OS=darwin\033[0m\n"
 	@printf "  \033[36mmake dist OS=linux ARCH=arm64\033[0m\n"
 	@printf "  \033[36mmake dist OS=darwin,linux ARCH=amd64,arm64\033[0m\n"
+	@printf "  \033[36mmake -n release\033[0m\n"
 	@printf "  \033[36mmake release\033[0m\n"
