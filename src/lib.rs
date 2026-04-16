@@ -3,19 +3,17 @@ mod filter;
 mod github;
 mod model;
 mod output;
-mod saved;
 
 use std::io::{self, Write};
 
 use anyhow::{Result, anyhow};
 use clap::Parser;
 
-use crate::cli::{Cli, Commands, SaveArgs, SweepArgs};
+use crate::cli::{Cli, Commands, SweepArgs};
 use crate::filter::SweepFilters;
 use crate::github::{GitHubClient, HttpGitHubClient, resolve_auth_context};
-use crate::model::{NotificationThread, PullRequest, RepoRef};
+use crate::model::{NotificationThread, PullRequest};
 use crate::output::{ListRow, write_list};
-use crate::saved::SavedRegistry;
 
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
@@ -23,20 +21,17 @@ pub fn run() -> Result<()> {
     match cli.command {
         Commands::List => run_list(),
         Commands::Sweep(args) => run_sweep(args),
-        Commands::Save(args) => run_save(args),
     }
 }
 
 fn run_list() -> Result<()> {
     let auth = resolve_auth_context()?;
-    let client = HttpGitHubClient::new(auth.clone())?;
-    let saved = SavedRegistry::load()?;
+    let client = HttpGitHubClient::new(auth)?;
     let notifications = client.list_notifications()?;
 
     let rows = notifications
         .iter()
         .map(|thread| ListRow {
-            saved: saved.contains_notification(auth.host(), thread),
             status: if thread.unread { "unread" } else { "read" },
             reason: thread.reason.clone(),
             repository: thread.repository.full_name.clone(),
@@ -52,21 +47,15 @@ fn run_list() -> Result<()> {
 }
 
 fn run_sweep(args: SweepArgs) -> Result<()> {
-    let filters = SweepFilters::try_from(args)?;
     let auth = resolve_auth_context()?;
-    let client = HttpGitHubClient::new(auth.clone())?;
-    let saved = SavedRegistry::load()?;
+    let filters = SweepFilters::build(args, auth.login().to_owned())?;
+    let client = HttpGitHubClient::new(auth)?;
     let notifications = client.list_notifications()?;
 
     let mut candidates = Vec::new();
     let mut metadata_failures = Vec::new();
 
     for thread in notifications {
-        let is_saved = saved.contains_notification(auth.host(), &thread);
-        if is_saved {
-            continue;
-        }
-
         let pr = match pr_metadata_for_thread(&client, &filters, &thread) {
             Ok(pr) => pr,
             Err(error) => {
@@ -152,25 +141,4 @@ fn pr_metadata_for_thread(
 
     let pr = client.get_pull_request(&reference.repo, reference.number)?;
     Ok(Some(pr))
-}
-
-fn run_save(args: SaveArgs) -> Result<()> {
-    let auth = resolve_auth_context()?;
-    let client = HttpGitHubClient::new(auth.clone())?;
-    let repo = RepoRef::parse(&args.repo)?;
-    let pr = client.get_pull_request(&repo, args.pr)?;
-
-    let mut saved = SavedRegistry::load()?;
-    let added = saved.save_pull_request(auth.host(), &repo, pr.number, &pr.title)?;
-
-    if added {
-        println!(
-            "Saved PR #{} in {} locally. Future sweeps will skip it.",
-            pr.number, repo
-        );
-    } else {
-        println!("PR #{} in {} is already saved locally.", pr.number, repo);
-    }
-
-    Ok(())
 }

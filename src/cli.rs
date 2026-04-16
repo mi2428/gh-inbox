@@ -13,9 +13,9 @@ Examples:
   gh inbox list
   gh inbox sweep
   gh inbox sweep --read
+  gh inbox sweep --include-authored
   gh inbox sweep --closed --repo cli/cli --user monalisa
   gh inbox sweep --team-mentioned --no-mentioned
-  gh inbox save --repo cli/cli --pr 123
 "
 )]
 pub struct Cli {
@@ -29,8 +29,6 @@ pub enum Commands {
     List,
     /// Mark matching notifications as done.
     Sweep(SweepArgs),
-    /// Save a pull request locally so future sweeps skip it.
-    Save(SaveArgs),
 }
 
 #[derive(Debug, Args, Clone, PartialEq, Eq)]
@@ -58,15 +56,8 @@ pub struct SweepArgs {
     /// Only sweep notifications where the reason is not mention.
     #[arg(long)]
     pub no_mentioned: bool,
-}
 
-#[derive(Debug, Args, Clone, PartialEq, Eq)]
-pub struct SaveArgs {
-    /// Repository in OWNER/REPO form.
-    #[arg(long, value_name = "OWNER/REPO")]
-    pub repo: String,
-
-    /// Pull request number.
-    #[arg(long, value_name = "NUMBER")]
-    pub pr: u64,
+    /// Also sweep pull request notifications authored by the authenticated user.
+    #[arg(long)]
+    pub include_authored: bool,
 }

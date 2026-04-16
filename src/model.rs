@@ -123,15 +123,6 @@ impl RepoRef {
         })
     }
 
-    pub fn new_unchecked(full_name: String) -> Self {
-        let (owner, name) = full_name.split_once('/').unwrap_or(("", ""));
-
-        Self {
-            owner: owner.to_owned(),
-            name: name.to_owned(),
-        }
-    }
-
     pub fn matches(&self, full_name: &str) -> bool {
         self.to_string().eq_ignore_ascii_case(full_name)
     }

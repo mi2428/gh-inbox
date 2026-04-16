@@ -19,14 +19,14 @@ pub trait GitHubClient {
 
 #[derive(Debug, Clone)]
 pub struct AuthContext {
-    host: String,
+    login: String,
     api_base: String,
     token: String,
 }
 
 impl AuthContext {
-    pub fn host(&self) -> &str {
-        &self.host
+    pub fn login(&self) -> &str {
+        &self.login
     }
 }
 
@@ -156,7 +156,7 @@ pub fn resolve_auth_context() -> Result<AuthContext> {
     let account = select_account(&decoded.hosts, preferred_host.as_deref())?;
 
     Ok(AuthContext {
-        host: account.host.clone(),
+        login: account.login.clone(),
         api_base: api_base_for_host(&account.host),
         token: account
             .token
@@ -224,6 +224,7 @@ struct AuthStatus {
 struct AuthHostEntry {
     active: bool,
     host: String,
+    login: String,
     state: String,
     token: Option<String>,
 }
@@ -237,6 +238,7 @@ mod tests {
         AuthHostEntry {
             active,
             host: host.to_owned(),
+            login: "monalisa".to_owned(),
             state: "success".to_owned(),
             token: Some("token".to_owned()),
         }

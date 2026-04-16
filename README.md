@@ -6,7 +6,6 @@ It provides a small command surface that is intentionally aligned with the way `
 
 - `gh inbox list`
 - `gh inbox sweep`
-- `gh inbox save`
 
 ## Commands
 
@@ -14,11 +13,11 @@ It provides a small command surface that is intentionally aligned with the way `
 
 Lists notifications that are still in the inbox. This includes both unread and already-read notifications that have not been marked as done yet.
 
-The output also shows whether a notification is protected by the local save registry.
-
 ### `gh inbox sweep`
 
 Marks matching notifications as done.
+
+By default, notifications for pull requests authored by the authenticated user are protected and are not marked as done. Use `--include-authored` to include them in a sweep.
 
 Supported filters:
 
@@ -28,6 +27,7 @@ Supported filters:
 - `--user LOGIN`: only pull requests opened by the given user
 - `--team-mentioned`: only notifications whose reason is `team_mention`
 - `--no-mentioned`: only notifications where the reason is not `mention`
+- `--include-authored`: also sweep pull request notifications authored by the authenticated user
 
 Filters are combined with logical AND.
 
@@ -41,26 +41,8 @@ gh inbox sweep --repo cli/cli
 gh inbox sweep --read --closed --repo cli/cli --user monalisa
 gh inbox sweep --team-mentioned
 gh inbox sweep --no-mentioned
+gh inbox sweep --include-authored
 ```
-
-### `gh inbox save`
-
-Saves a pull request locally so future `sweep` runs skip it.
-
-Example:
-
-```console
-gh inbox save --repo cli/cli --pr 123
-```
-
-## Important note about `save`
-
-GitHub's web inbox has a native Saved state, but the public Notifications API does not expose a matching save endpoint. Because of that, `gh inbox save` uses a local save registry instead of toggling the Saved state in the GitHub web UI.
-
-The registry is stored in the standard user config directory:
-
-- macOS: `~/Library/Application Support/gh-inbox/saved-pull-requests.json`
-- Linux: `${XDG_CONFIG_HOME:-~/.config}/gh-inbox/saved-pull-requests.json`
 
 ## Installation
 
@@ -70,7 +52,7 @@ Once a release exists, install the extension with:
 gh extension install OWNER/gh-inbox
 ```
 
-This repository publishes precompiled Darwin binaries for:
+This repository publishes precompiled binaries for:
 
 - `darwin-amd64`
 - `darwin-arm64`
@@ -84,7 +66,7 @@ The project uses:
 - Rust 2024 edition
 - `clap` for the CLI surface
 - `reqwest` for the GitHub API client
-- unit tests for the important filtering and save-registry logic
+- unit tests for the important filtering logic
 
 Common tasks:
 
@@ -106,6 +88,6 @@ make release-main
 
 ## Release automation
 
-.github/workflows/release.yml runs on every push to `main`, verifies formatting, linting, and tests on Ubuntu, builds Darwin assets on macOS, builds Linux assets on Ubuntu via Docker and QEMU, then creates or updates a rolling release named `main-<short-sha>`.
+[.github/workflows/release.yml](.github/workflows/release.yml) runs on every push to `main`, verifies formatting, linting, and tests on Ubuntu, builds Darwin assets on macOS, builds Linux assets on Ubuntu via Docker and QEMU, then creates or updates a rolling release named `main-<short-sha>`.
 
 The workflow uploads the four precompiled binaries that `gh extension install` expects for the supported Darwin and Linux architectures.

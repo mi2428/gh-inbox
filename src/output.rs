@@ -5,7 +5,6 @@ use tabwriter::TabWriter;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ListRow {
-    pub saved: bool,
     pub status: &'static str,
     pub reason: String,
     pub repository: String,
@@ -19,13 +18,12 @@ pub fn write_list(mut writer: impl Write, rows: &[ListRow]) -> Result<()> {
     }
 
     let mut table = TabWriter::new(Vec::new()).padding(2);
-    writeln!(table, "SAVED\tSTATUS\tREASON\tREPOSITORY\tSUBJECT")?;
+    writeln!(table, "STATUS\tREASON\tREPOSITORY\tSUBJECT")?;
 
     for row in rows {
-        let saved = if row.saved { "yes" } else { "no" };
         writeln!(
             table,
-            "{saved}\t{}\t{}\t{}\t{}",
+            "{}\t{}\t{}\t{}",
             row.status, row.reason, row.repository, row.subject
         )?;
     }
@@ -43,7 +41,6 @@ mod tests {
     #[test]
     fn renders_a_table() {
         let rows = vec![ListRow {
-            saved: true,
             status: "unread",
             reason: "team_mention".to_owned(),
             repository: "cli/cli".to_owned(),
@@ -54,7 +51,7 @@ mod tests {
         write_list(&mut output, &rows).expect("rendered table");
 
         let rendered = String::from_utf8(output).expect("utf8 output");
-        assert!(rendered.contains("SAVED"));
+        assert!(rendered.contains("STATUS"));
         assert!(rendered.contains("team_mention"));
         assert!(rendered.contains("PR #123  Example"));
     }
