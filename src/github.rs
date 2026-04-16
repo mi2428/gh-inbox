@@ -93,7 +93,7 @@ impl GitHubClient for HttpGitHubClient {
 
         loop {
             let path = format!(
-                "notifications?all=true&per_page={USER_NOTIFICATIONS_PER_PAGE}&page={page}"
+                "notifications?all=false&per_page={USER_NOTIFICATIONS_PER_PAGE}&page={page}"
             );
             let response = self
                 .request(Method::GET, &path)
@@ -323,7 +323,7 @@ mod tests {
 
     #[test]
     fn parses_next_page_from_link_header() {
-        let link = "<https://api.github.com/notifications?all=true&per_page=50&page=2>; rel=\"next\", <https://api.github.com/notifications?all=true&per_page=50&page=24>; rel=\"last\"";
+        let link = "<https://api.github.com/notifications?all=false&per_page=50&page=2>; rel=\"next\", <https://api.github.com/notifications?all=false&per_page=50&page=24>; rel=\"last\"";
 
         assert_eq!(next_page_number_from_link(link), Some(2));
     }
@@ -331,12 +331,12 @@ mod tests {
     #[test]
     fn ignores_non_next_link_entries() {
         let link =
-            "<https://api.github.com/notifications?all=true&per_page=50&page=24>; rel=\"last\"";
+            "<https://api.github.com/notifications?all=false&per_page=50&page=24>; rel=\"last\"";
 
         assert_eq!(next_page_number_from_link(link), None);
         assert_eq!(
             parse_next_page_link(
-                "<https://api.github.com/notifications?all=true&per_page=50&page=24>; rel=\"last\""
+                "<https://api.github.com/notifications?all=false&per_page=50&page=24>; rel=\"last\""
             ),
             None
         );

@@ -23,7 +23,6 @@ Options:
 
 Examples:
   gh inbox sweep
-  gh inbox sweep --read
   gh inbox sweep --include-authored
   gh inbox sweep --closed --repo mi2428/helloworld --user renovate
   gh inbox sweep --team-mentioned --no-mentioned
@@ -39,7 +38,6 @@ Mark matching notifications as done
 Usage: gh inbox sweep [OPTIONS]
 
 Options:
-      --read               Only sweep notifications that are already marked as read
       --closed             Only sweep pull request notifications whose pull requests are closed or merged
       --repo <OWNER/REPO>  Only sweep notifications from the given repository
       --user <USER>        Only sweep pull request notifications opened by the given user
